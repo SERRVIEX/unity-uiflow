@@ -2,6 +2,8 @@ using UnityEngine;
 
 using TMPro;
 
+using DG.Tweening;
+
 using UIFlow;
 
 public class LoadingViewController : ViewController
@@ -15,7 +17,7 @@ public class LoadingViewController : ViewController
     public static LoadingViewController Present(string text = "")
     {
         if (_instance == null)
-            _instance = Storyboard.Present(Storyboard.GetCachedViewController<LoadingViewController>());
+            _instance = Storyboard.Present<LoadingViewController>();
 
         _instance.Set(text);
 
@@ -31,6 +33,18 @@ public class LoadingViewController : ViewController
     }
 
     public void Set(string text) => _message.text = text;
+
+    public override void OnPresentTransition()
+    {
+        CanvasGroup.alpha = 0;
+        CanvasGroup.DOFade(1, Transition.Appear);
+    }
+
+    public override void OnDismissTransition()
+    {
+        CanvasGroup.DOFade(0, Transition.Disappear);
+    }
+
 
     public static void Release()
     {

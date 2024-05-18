@@ -6,6 +6,7 @@ using UnityEngine.UI;
 using UnityEngine.Assertions;
 
 using TMPro;
+using DG.Tweening;
 
 using UIFlow;
 using UIFlow.Predefined.Alert;
@@ -23,10 +24,8 @@ public class AlertViewController : ViewController
 
     // Methods
 
-    protected override void Awake()
+    protected void Awake()
     {
-        base.Awake();
-
         _distributed.Add(typeof(AlertLabelButtonData), typeof(AlertLabelButtonView));
         _distributed.Add(typeof(AlertIconButtonData), typeof(AlertIconButtonView));
         _distributed.Add(typeof(AlertDefaultButtonData), typeof(AlertDefaultButtonView));
@@ -36,7 +35,7 @@ public class AlertViewController : ViewController
 
     public static AlertViewController Present()
     {
-        AlertViewController alertViewController = Storyboard.Present(Storyboard.GetCachedViewController<AlertViewController>());
+        AlertViewController alertViewController = Storyboard.Present<AlertViewController>();
         return alertViewController;
     }
 
@@ -53,7 +52,7 @@ public class AlertViewController : ViewController
             contentSizeFitter.verticalFit =  ContentSizeFitter.FitMode.Unconstrained;
 
             HorizontalLayoutGroup layoutGroup = _buttonsContent.gameObject.AddComponent<HorizontalLayoutGroup>();
-            layoutGroup.spacing = 25;
+            layoutGroup.spacing = 10;
 
             layoutGroup.childControlWidth = true;
             layoutGroup.childControlHeight = true;
@@ -73,7 +72,7 @@ public class AlertViewController : ViewController
             contentSizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             VerticalLayoutGroup layoutGroup = _buttonsContent.gameObject.AddComponent<VerticalLayoutGroup>();
-            layoutGroup.spacing = 25;
+            layoutGroup.spacing = 10;
             
             layoutGroup.childControlWidth = true;
             layoutGroup.childControlHeight = false;
@@ -126,5 +125,18 @@ public class AlertViewController : ViewController
             return view;
 
         return null;
+    }
+
+    public override void OnPresentTransition()
+    {
+        Content.DOPunchScale(Vector3.one * .1f, Transition.Appear);
+        CanvasGroup.alpha = 0;
+        CanvasGroup.DOFade(1, Transition.Appear);
+    }
+
+    public override void OnDismissTransition()
+    {
+        Content.DOAnchorPosY(-RectTransform.rect.height / 2f, Transition.Disappear);
+        CanvasGroup.DOFade(0, Transition.Disappear);
     }
 }

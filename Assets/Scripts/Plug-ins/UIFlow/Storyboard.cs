@@ -31,23 +31,53 @@ namespace UIFlow
         [SerializeField, Immutable] private CanvasScaler _canvasScaler;
         [SerializeField] private Layers _layers;
 
-        [SerializeField] private ViewController _initialViewController;
-        [SerializeField] private ViewController[] _cachedViewControllers;
+        public static string ActiveSection
+        {
+            get => _activeSection;
+            set
+            {
+                if (value == _activeSection)
+                    return;
 
-        private Dictionary<Layer, List<ViewController>> _controllers;
+                _activeSection = value;
+
+                foreach (var item in Instance.Sections)
+                {
+                    if (item.Key == value)
+                        item.Value[item.Value.Count - 1].gameObject.SetActive(true);
+               
+                    else
+                    {
+                        for (int i = 0; i < item.Value.Count; i++)
+                            item.Value[i].gameObject.SetActive(false);
+                    }
+                }
+            }
+        }
+
+        private static string _activeSection;
+
+        [SerializeField] private string _initialSection = "default";
+        public Dictionary<string, List<ViewController>> Sections = new Dictionary<string, List<ViewController>>();
+
+        [SerializeField] private ViewController _initialViewController;
+        private StoryboardContent _storyboardContent;
+
         private float _eventSystemCooldown;
 
         // Methods
 
         private void Awake()
         {
-            if(Instance != null)
+            if (Instance != null)
             {
                 Destroy(gameObject);
                 return;
             }
 
             Instance = this;
+
+            _activeSection = _initialSection;
 
             Assert.IsNotNull(_camera);
             Assert.IsNotNull(_eventSystem);
@@ -61,17 +91,9 @@ namespace UIFlow
             Assert.IsNotNull(_layers.Alert);
             Assert.IsNotNull(_layers.Over);
 
-            AdaptCanvas();
+            _storyboardContent = Resources.LoadAll<StoryboardContent>("")[0];
 
-            _controllers = new Dictionary<Layer, List<ViewController>>
-            {
-                { Layer.Under, new List<ViewController>() },
-                { Layer.Base, new List<ViewController>() },
-                { Layer.Extra, new List<ViewController>() },
-                { Layer.Context, new List<ViewController>() },
-                { Layer.Alert, new List<ViewController>() },
-                { Layer.Over, new List<ViewController>() }
-            };
+            AdaptCanvas();
 
             if (_initialViewController != null)
                 Present(_initialViewController);
@@ -106,8 +128,13 @@ namespace UIFlow
         }
 
         /// <summary>
-        /// Return the current screen orientation that also work in the editor without simulator.
+        /// Retrieves the current screen orientation, considering both editor and device settings.
         /// </summary>
+        /// <remarks>
+        /// In the Unity Editor, this method determines the screen orientation based on the aspect ratio 
+        /// of the editor window. On a device, it returns the actual device orientation.
+        /// </remarks>
+        /// <returns>The current screen orientation.</returns>
         private ScreenOrientation GetScreenOrientation()
         {
 #if UNITY_EDITOR
@@ -117,83 +144,191 @@ namespace UIFlow
 #endif
         }
 
+        /// <summary>
+        /// Retrieves the canvas object associated with the specified layer.
+        /// </summary>
+        /// <param name="layer">The layer to retrieve the canvas for.</param>
+        /// <returns>The canvas object corresponding to the specified layer.</returns>
         public static Canvas GetLayer(Layer layer)
         {
-            switch (layer)
+            return layer switch
             {
-                case Layer.Under: return Instance._layers.Under;
-                case Layer.Base: return Instance._layers.Base;
-                case Layer.Extra: return Instance._layers.Extra;
-                case Layer.Context: return Instance._layers.Context;
-                case Layer.Alert: return Instance._layers.Alert;
-                case Layer.Over: return Instance._layers.Over;
-                default: return Instance._layers.Under;
+                Layer.Under => Instance._layers.Under,
+                Layer.Base => Instance._layers.Base,
+                Layer.Extra => Instance._layers.Extra,
+                Layer.Context => Instance._layers.Context,
+                Layer.Alert => Instance._layers.Alert,
+                Layer.Over => Instance._layers.Over,
+                _ => Instance._layers.Under,
+            };
+        }
+
+        public static ViewController GetViewController(string section, int index)
+        {
+            return Instance.Sections[section][index];
+        }
+
+        /// <summary>
+        /// Retrieves the previous view controller relative to the specified view controller.
+        /// </summary>
+        /// <param name="viewController">The target view controller.</param>
+        /// <returns>The previous view controller if found; otherwise, null.</returns>
+        public static ViewController GetPreviousViewController(ViewController viewController)
+        {
+            var controllers = Instance.Sections[viewController.Section];
+            if (controllers.Count == 1)
+                return null;
+
+            for (int i = controllers.Count - 1; i >= 0; i--)
+            {
+                if (i == 0) return null;
+
+                if (controllers[i] == viewController)
+                    return controllers[i - 1];
             }
+
+            return null;
         }
 
-        public static void Present(ViewController viewController)
+        /// <summary>
+        /// Presents a view controller instantiated from a prefab in the active section's canvas.
+        /// </summary>
+        /// <typeparam name="T">Type of the view controller to present.</typeparam>
+        /// <param name="viewController">The view controller prefab to present.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts to objects underneath the view controller.</param>
+        /// <returns>The presented view controller.</returns>
+        public static T Present<T>(T viewController, bool blockRaycast = true) where T : ViewController
         {
-
-            Assert.IsFalse(viewController == null);
-
-            ViewController obj = Instantiate(viewController, Instance._layers.GetCanvas(viewController.Layer).transform);
-            obj.Canvas.worldCamera = Instance._camera;
-
-            Instance.StartCoroutine(PresentImpl(obj, true));
+            return Present(viewController, Instance._layers.GetCanvas(viewController.Layer).transform, blockRaycast);
         }
 
-        public static void Present(ViewController viewController, bool blockRaycast = true)
+        /// <summary>
+        /// Presents a view controller instantiated from a prefab in the specified section's canvas.
+        /// </summary>
+        /// <typeparam name="T">Type of the view controller to present.</typeparam>
+        /// <param name="prefab">The view controller prefab to present.</param>
+        /// <param name="section">The name of the section to present the view controller in.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts to objects underneath the view controller.</param>
+        /// <returns>The presented view controller.</returns>
+        public static T Present<T>(T prefab, string section, bool blockRaycast = true) where T : ViewController
         {
-            Assert.IsFalse(viewController == null);
+            Assert.IsFalse(prefab == null);
 
-            ViewController obj = Instantiate(viewController, Instance._layers.GetCanvas(viewController.Layer).transform);
-            obj.Canvas.worldCamera = Instance._camera;
+            var viewController = Instantiate(prefab, Instance._layers.GetCanvas(prefab.Layer).transform);
+            viewController.name = viewController.GetType().Name;
+            Instance.StartCoroutine(PresentImpl(viewController, section, blockRaycast));
 
-            Instance.StartCoroutine(PresentImpl(obj, blockRaycast));
+            return (T)viewController;
         }
 
-        public static T2 Present<T2>(T2 viewController, bool blockRaycast = true) where T2 : ViewController
+        /// <summary>
+        /// Presents a view controller instantiated from a prefab within another parent transform.
+        /// </summary>
+        /// <typeparam name="T">Type of the view controller to present.</typeparam>
+        /// <param name="prefab">The view controller prefab to present.</param>
+        /// <param name="parent">The transform to parent the instantiated view controller to.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts to objects underneath the view controller.</param>
+        /// <returns>The presented view controller.</returns>
+        public static T Present<T>(T prefab, Transform parent, bool blockRaycast = true) where T : ViewController
         {
-            Assert.IsFalse(viewController == null);
+            Assert.IsFalse(prefab == null);
 
-            ViewController obj = Instantiate(viewController, Instance._layers.GetCanvas(viewController.Layer).transform);
-            obj.Canvas.worldCamera = Instance._camera;
+            var viewController = Instantiate(prefab, parent);
+            viewController.name = viewController.GetType().Name;
+            Instance.StartCoroutine(PresentImpl(viewController, null, blockRaycast));
 
-            Instance.StartCoroutine(PresentImpl(obj, blockRaycast));
-
-            return (T2)obj;
+            return (T)viewController;
         }
 
-        public static T2 Present<T2>(bool blockRaycast = true) where T2 : ViewController
+        /// <summary>
+        /// Presents a view controller of the specified type in the active section's canvas.
+        /// </summary>
+        /// <typeparam name="T">Type of the view controller to present.</typeparam>
+        /// <param name="blockRaycast">Determines whether to block raycasts to objects underneath the view controller.</param>
+        /// <returns>The presented view controller.</returns>
+        public static T Present<T>(bool blockRaycast = true) where T : ViewController
         {
-            ViewController viewController = GetCachedViewController<T2>();
-            Assert.IsFalse(viewController == null);
-
-            ViewController obj = Instantiate(viewController, Instance._layers.GetCanvas(viewController.Layer).transform);
-            obj.Canvas.worldCamera = Instance._camera;
-
-            Instance.StartCoroutine(PresentImpl(obj, blockRaycast));
-
-            return (T2)obj;
+            return Present<T>(string.Empty, blockRaycast);
         }
 
-        private static IEnumerator PresentImpl(ViewController obj, bool blockRaycast)
+        /// <summary>
+        /// Presents a view controller of the specified type in the specified section's canvas.
+        /// </summary>
+        /// <typeparam name="T">Type of the view controller to present.</typeparam>
+        /// <param name="section">The name of the section to present the view controller in.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts to objects underneath the view controller.</param>
+        /// <returns>The presented view controller.</returns>
+        public static T Present<T>(string section, bool blockRaycast = true) where T : ViewController
+        {
+            var prefab = Instance._storyboardContent.GetViewController<T>();
+            Assert.IsFalse(prefab == null);
+
+            var viewController = Instantiate(prefab, Instance._layers.GetCanvas(prefab.Layer).transform);
+            viewController.name = viewController.GetType().Name;
+            Instance.StartCoroutine(PresentImpl(viewController, section, blockRaycast));
+
+            return (T)viewController;
+        }
+
+        /// <summary>
+        /// Presents a view controller of the specified type within another parent transform.
+        /// </summary>
+        /// <typeparam name="T">Type of the view controller to present.</typeparam>
+        /// <param name="parent">The transform to parent the instantiated view controller to.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts to objects underneath the view controller.</param>
+        /// <returns>The presented view controller.</returns>
+        public static T Present<T>(Transform parent, bool blockRaycast = true) where T : ViewController
+        {
+            var prefab = Instance._storyboardContent.GetViewController<T>();
+            Assert.IsFalse(prefab == null);
+
+            var viewController = Instantiate(prefab, parent);
+            viewController.name = viewController.GetType().Name;
+            Instance.StartCoroutine(PresentImpl(viewController, null, blockRaycast));
+
+            return (T)viewController;
+        }
+
+        /// <summary>
+        /// Coroutine to handle the presentation of a view controller.
+        /// </summary>
+        /// <param name="viewController">The view controller being presented.</param>
+        /// <param name="section">The section where the view controller is being presented.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts during the presentation.</param>
+        private static IEnumerator PresentImpl(ViewController viewController, string section, bool blockRaycast)
         {
             if (blockRaycast)
-                SetEventSystemInactive(obj.Transition.Appear);
-            Instance._controllers[obj.Layer].Add(obj);
+                SetEventSystemInactive(viewController.Transition.Appear);
 
-            obj.OnWillAppear();
-            obj.OnWillAppearHandler?.Invoke();
+            string validSection = string.IsNullOrEmpty(section) ? ActiveSection : section;
+            if (!Instance.Sections.ContainsKey(validSection))
+                Instance.Sections.Add(validSection, new List<ViewController>());
 
-            obj.OnAppearTransition();
+            if (!viewController.Unconstrainted)
+                Instance.Sections[validSection].Add(viewController);
 
-            yield return new WaitForSecondsRealtime(obj.Transition.Appear);
+            viewController.InitializeController(validSection);
+            viewController.Canvas.worldCamera = Instance._camera;
 
-            obj.OnDidAppear();
-            obj.OnDidAppearHandler?.Invoke();
+            viewController.OnWillAppear();
+            viewController.OnWillAppearHandler?.Invoke();
+
+            viewController.Canvas.enabled = false;
+            yield return new WaitForEndOfFrame();
+            viewController.Canvas.enabled = true;
+
+            viewController.OnPresentTransition();
+
+            yield return new WaitForSecondsRealtime(viewController.Transition.Appear);
+
+            viewController.OnDidAppear();
+            viewController.OnDidAppearHandler?.Invoke();
         }
 
+        /// <summary>
+        /// Dismisses the specified view controller with the default blockRaycast setting (true).
+        /// </summary>
+        /// <param name="viewController">The view controller to dismiss.</param>
         public static void Dismiss(ViewController viewController)
         {
             Assert.IsFalse(viewController == null);
@@ -201,6 +336,11 @@ namespace UIFlow
             Instance.StartCoroutine(DismissImpl(viewController, true));
         }
 
+        /// <summary>
+        /// Dismisses the specified view controller with the specified blockRaycast setting.
+        /// </summary>
+        /// <param name="viewController">The view controller to dismiss.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts during the dismissal.</param>
         public static void Dismiss(ViewController viewController, bool blockRaycast = true)
         {
             Assert.IsFalse(viewController == null);
@@ -208,6 +348,12 @@ namespace UIFlow
             Instance.StartCoroutine(DismissImpl(viewController, blockRaycast));
         }
 
+        /// <summary>
+        /// Dismisses the specified view controller of type T with the specified blockRaycast setting.
+        /// </summary>
+        /// <typeparam name="T2">Type of the view controller to dismiss.</typeparam>
+        /// <param name="viewController">The view controller to dismiss.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts during the dismissal.</param>
         public static void Dismiss<T2>(T2 viewController, bool blockRaycast = true) where T2 : ViewController
         {
             Assert.IsFalse(viewController == null);
@@ -215,29 +361,58 @@ namespace UIFlow
             Instance.StartCoroutine(DismissImpl(viewController, blockRaycast));
         }
 
+        /// <summary>
+        /// Coroutine to handle the dismissal of a view controller.
+        /// </summary>
+        /// <param name="viewController">The view controller to dismiss.</param>
+        /// <param name="blockRaycast">Determines whether to block raycasts during the dismissal.</param>
         private static IEnumerator DismissImpl(ViewController viewController, bool blockRaycast)
         {
             if (blockRaycast)
                 SetEventSystemInactive(viewController.Transition.Disappear);
-            Instance._controllers[viewController.Layer].Remove(viewController);
 
             viewController.OnWillDisappear();
             viewController.OnWillDisappearHandler?.Invoke();
 
-            viewController.OnDisappearTransition();
+            yield return new WaitForEndOfFrame();
+
+            viewController.OnDismissTransition();
 
             yield return new WaitForSecondsRealtime(viewController.Transition.Disappear);
 
             viewController.OnDidDisappear();
             viewController.OnDidDisappearHandler?.Invoke();
 
+            if(!viewController.Unconstrainted)
+                Instance.Sections[viewController.Section].Remove(viewController);
+
             if (viewController != null)
                 Destroy(viewController.gameObject);
         }
 
+        /// <summary>
+        /// Forces dismissal of the specified view controller without any transition animations.
+        /// </summary>
+        /// <param name="viewController">The view controller to dismiss forcibly.</param>
+        public static void ForceDismiss(ViewController viewController)
+        {
+            Instance.Sections[viewController.Section].Remove(viewController);
+
+            viewController.OnWillDisappear();
+            viewController.OnWillDisappearHandler?.Invoke();
+
+            viewController.OnDidDisappear();
+            viewController.OnDidDisappearHandler?.Invoke();
+
+            Destroy(viewController.gameObject);
+        }
+
+        /// <summary>
+        /// Forces dismissal of all view controllers without any transition animations.
+        /// </summary>
         public static void ForceDismissAll()
         {
-            foreach (var layer in Instance._controllers)
+            foreach (var layer in Instance.Sections)
             {
                 foreach (var viewController in layer.Value)
                 {
@@ -252,14 +427,14 @@ namespace UIFlow
                 }
             }
 
-            foreach (var layer in Instance._controllers)
+            foreach (var layer in Instance.Sections)
                 layer.Value.Clear();
         }
 
         /// <summary>
-        /// Don't allow interactions with thee interface when animation is doing.
+        /// Temporarily disables the EventSystem to prevent interactions with the interface during animations.
         /// </summary>
-        /// <param name="duration">How many will be inactive.</param>
+        /// <param name="duration">The duration for which the EventSystem will be disabled.</param>
         private static void SetEventSystemInactive(float duration)
         {
             Assert.IsFalse(Instance._eventSystem == null);
@@ -270,66 +445,45 @@ namespace UIFlow
         }
 
         /// <summary>
-        /// Find the nearest view controller plane distance.
+        /// Finds the nearest view controller plane distance in the specified section.
         /// </summary>
-        /// <param name="layer">In which layer the search should be performed.</param>
-        public static float FindNearestDistance(Layer layer)
+        /// <param name="section">The section in which the search should be performed.</param>
+        /// <returns>The distance of the nearest view controller plane.</returns>
+        public static float GetNearestCanvasPlaneDistance(string section)
         {
-            if (Instance._controllers[layer].Count == 0)
+            if (section == null)
+                return 100;
+
+            var controllers = Instance.Sections;
+            if (!controllers.ContainsKey(section))
+                controllers.Add(section, new List<ViewController>());
+
+            if (controllers[section].Count == 0)
                 return 100;
 
             float distance = 100;
-            for (int i = 0; i < Instance._controllers[layer].Count; i++)
-                if (Instance._controllers[layer][i].Canvas.planeDistance < distance)
-                    distance = Instance._controllers[layer][i].Canvas.planeDistance;
+            for (int i = 0; i < controllers[section].Count; i++)
+                if (controllers[section][i].Canvas.planeDistance < distance)
+                    distance = controllers[section][i].Canvas.planeDistance;
 
             return distance - 0.5f;
         }
 
-        public static List<T2> FindViewControllersOfType<T2>() where T2 : ViewController
+        public static List<T> FindViewControllersOfType<T>() where T : ViewController
         {
-            List<T2> result = new List<T2>();
+            List<T> result = new List<T>();
 
-            foreach (var layer in Instance._controllers)
+            foreach (var layer in Instance.Sections)
                 for (int i = 0; i < layer.Value.Count; i++)
-                    if (layer.Value[i].GetType() == typeof(T2))
-                        result.Add(layer.Value[i].GetComponent<T2>());
+                    if (layer.Value[i].GetType() == typeof(T))
+                        result.Add(layer.Value[i].GetComponent<T>());
 
             return result;
-        }
-
-        public static T2 GetCachedViewController<T2>() where T2 : ViewController
-        {
-            for (int i = 0; i < Instance._cachedViewControllers.Length; i++)
-                if (Instance._cachedViewControllers[i].GetType() == typeof(T2))
-                    return (T2)Instance._cachedViewControllers[i];
-
-            return null;
         }
 
         private void Reset()
         {
             OnValidate();
-
-            List<ViewController> cachedViewControllers = new List<ViewController>();
-
-            var alerts = Resources.FindObjectsOfTypeAll<AlertViewController>();
-            if (alerts.Length > 0)
-                cachedViewControllers.Add(alerts[0]);
-
-            var commands = Resources.FindObjectsOfTypeAll<CommandViewController>();
-            if (commands.Length > 0)
-                cachedViewControllers.Add(commands[0]);
-
-            var loadings = Resources.FindObjectsOfTypeAll<LoadingViewController>();
-            if (loadings.Length > 0)
-                cachedViewControllers.Add(loadings[0]);
-
-            var toasts = Resources.FindObjectsOfTypeAll<ToastViewController>();
-            if (toasts.Length > 0)
-                cachedViewControllers.Add(toasts[0]);
-
-            _cachedViewControllers = cachedViewControllers.ToArray();
         }
 
         private void OnValidate()

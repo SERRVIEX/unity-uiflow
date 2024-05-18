@@ -41,6 +41,7 @@ namespace UIFlow.Utils
               
                 if (GetScreenOrientation() == ScreenOrientation.Portrait)
                 {
+                    return;
                     if(Screen.width < 1080)
                         canvasScaler.referenceResolution = new Vector2(1080f * (1080f / Screen.width), canvasScaler.referenceResolution.y);
                     
@@ -53,7 +54,7 @@ namespace UIFlow.Utils
                 canvasScaler.matchWidthOrHeight = 0;
 
                 if (GetScreenOrientation() == ScreenOrientation.Portrait)
-                    canvasScaler.referenceResolution = new Vector2(Screen.width, 1920);
+                    canvasScaler.referenceResolution = new Vector2(Screen.height, 1920);
                 else
                     canvasScaler.referenceResolution = new Vector2(1920, 1080);
             }

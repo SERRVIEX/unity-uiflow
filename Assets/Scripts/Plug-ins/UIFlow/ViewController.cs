@@ -13,13 +13,23 @@ namespace UIFlow
     [RequireComponent(typeof(CanvasGroup))]
     public abstract class ViewController : MonoBehaviour
     {
-        public Layer Layer;
-        public TransitionDuration Transition;
+        public bool Initialized { get; private set; }
+        public string Section { get; private set; }
+        public Layer Layer => _layer;
+        [SerializeField] private Layer _layer;
+
+        public TransitionDuration Transition => _transition;
+        [SerializeField] private TransitionDuration _transition;
+
+        public bool Unconstrainted => _unconstrainted;
+        [SerializeField] private bool _unconstrainted;
+
+        public ViewController Previous => Storyboard.GetPreviousViewController(this);
 
         public RectTransform RectTransform { get; private set; }
         public Canvas Canvas { get; private set; }
-        [SerializeField] public CanvasGroup CanvasGroup { get; private set; }
-        [field: SerializeField] public RectTransform Content { get; private set; }
+        public CanvasGroup CanvasGroup { get; private set; }
+        public RectTransform Content { get; private set; }
 
         [HideInInspector] public UnityEvent OnWillAppearHandler = new UnityEvent();
         [HideInInspector] public UnityEvent OnDidAppearHandler = new UnityEvent();
@@ -28,22 +38,22 @@ namespace UIFlow
 
         // Methods
 
-        protected virtual void Awake()
+        public void InitializeController(string section)
         {
             RectTransform = GetComponent<RectTransform>();
 
             Canvas = GetComponent<Canvas>();
             Canvas.renderMode = RenderMode.ScreenSpaceCamera;
 
+            float planeDistance = Storyboard.GetNearestCanvasPlaneDistance(Section);
+            Canvas.planeDistance = planeDistance;
+
             CanvasGroup = GetComponent<CanvasGroup>();
 
             Content = transform.Find("Content").GetComponent<RectTransform>();
-        }
 
-        protected virtual void Start()
-        {
-            float planeDistance = Storyboard.FindNearestDistance(Layer);
-            Canvas.planeDistance = planeDistance;
+            Initialized = true;
+            Section = section;
         }
 
         public virtual void OnWillAppear() { }
@@ -54,18 +64,19 @@ namespace UIFlow
 
         public virtual void OnWillDisappear() { }
 
-        public virtual void OnAppearTransition() { }
+        public virtual void OnPresentTransition() { }
 
-        public virtual void OnDisappearTransition() { }
+        public virtual void OnDismissTransition() { }
 
         public virtual void Dismiss() => Storyboard.Dismiss(this, false);
         public virtual void Dismiss(bool blockRaycast = true) => Storyboard.Dismiss(this, false);
+        public virtual void ForceDismiss() => Storyboard.ForceDismiss(this);
 
         protected virtual void OnValidate()
         {
             name = GetType().Name;
 
-            RectTransform rectTransform = GetComponent<RectTransform>();
+            var rectTransform = GetComponent<RectTransform>();
             Assert.IsTrue(rectTransform != null);
 
             rectTransform.SetPivot(Pivot.MiddleCenter);
@@ -74,7 +85,7 @@ namespace UIFlow
 
             if(Content == null)
             {
-                RectTransform content = transform.Find("Content") as RectTransform;
+                var content = transform.Find("Content") as RectTransform;
                 if (content != null)
                     Content = content;
                 

@@ -11,6 +11,13 @@ namespace UIFlow
         public IconData? LeftIcon { get; private set; }
         public IconData? RightIcon { get; private set; }
 
+        // Constructors
+
+        public AlertComplexButtonData()
+        {
+            //LabelColor = Palette.GetColor("text_shade_1", "value");
+        }
+
         // Methods
 
         public AlertComplexButtonData SetLabel(string value)

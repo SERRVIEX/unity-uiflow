@@ -5,8 +5,16 @@ namespace UIFlow
 
     public abstract class AlertButtonBase
     {
-        public Color BackgroundColor { get; private set; } = new Color32(128, 128, 128, 255);
+        public Color BackgroundColor { get; private set; } = Color.white;
         public UnityAction OnClick { get; private set; }
+
+        // Constructors
+
+        public AlertButtonBase()
+        {
+            //BackgroundColor = Palette.GetColor("main_shade_3", "value");
+        }
+
 
         // Methods
 

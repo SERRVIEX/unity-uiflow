@@ -10,6 +10,13 @@ namespace UIFlow
         public Color LabelColor { get; private set; } = new Color32(255, 255, 255, 255);
         public IconData? Icon { get; private set; }
 
+        // Constructors
+
+        public AlertDefaultButtonData()
+        {
+            //LabelColor = Palette.GetColor("text_shade_1", "value");
+        }
+
         // Methods
 
         public AlertDefaultButtonData SetLabel(string value)

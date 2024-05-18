@@ -1,8 +1,9 @@
-namespace UIFlow
+﻿namespace UIFlow
 {
     using UnityEngine;
 
     using UnityEditor;
+    using static System.Collections.Specialized.BitVector32;
 
     [CustomEditor(typeof(Storyboard), true)]
     public class StoryboardEditor : Editor
@@ -21,6 +22,7 @@ namespace UIFlow
             serializedObject.Update();
 
             Base();
+            Sections();
             Canvas();
             ViewControllers();
 
@@ -57,6 +59,27 @@ namespace UIFlow
             EditorGUILayout.PropertyField(events, true);
         }
 
+        private void Sections()
+        {
+            AdvancedGUI.Headline("Sections");
+
+            if (Application.isPlaying)
+            {
+                foreach (var section in _target.Sections)
+                {
+                    EditorGUILayout.LabelField(section.Key);
+                    EditorGUI.indentLevel++;
+                    for (int i = 0; i < section.Value.Count; i++)
+                    {
+                        GUI.color = section.Value[i].gameObject.activeSelf ? Color.white : Color.gray;
+                        EditorGUILayout.LabelField("↳" + section.Value[i].GetType().Name);
+                    }
+                    GUI.color = Color.white;
+                    EditorGUI.indentLevel--;
+                }
+            }
+        }
+
         private void Canvas()
         {
             AdvancedGUI.Headline("Canvas");
@@ -66,6 +89,9 @@ namespace UIFlow
 
             SerializedProperty layers = serializedObject.FindProperty("_layers");
             EditorGUILayout.PropertyField(layers, true);
+
+            SerializedProperty initialSection = serializedObject.FindProperty("_initialSection");
+            EditorGUILayout.PropertyField(initialSection, true);
         }
 
         private void ViewControllers()
@@ -75,8 +101,8 @@ namespace UIFlow
             SerializedProperty initialViewController = serializedObject.FindProperty("_initialViewController");
             EditorGUILayout.PropertyField(initialViewController, true);
 
-            SerializedProperty cachedViewControllers = serializedObject.FindProperty("_cachedViewControllers");
-            EditorGUILayout.PropertyField(cachedViewControllers, true);
+            //SerializedProperty cachedViewControllers = serializedObject.FindProperty("_cachedViewControllers");
+            //EditorGUILayout.PropertyField(cachedViewControllers, true);
         }
     }
 }

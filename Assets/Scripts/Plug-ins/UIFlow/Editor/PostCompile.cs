@@ -60,6 +60,7 @@ namespace UIFlow.Editors
                 return;
 
             EditorGUIUtility.SetIconForObject(obj, _viewControllerIcon);
+            EditorUtility.SetDirty(obj);
         }
     }
 }

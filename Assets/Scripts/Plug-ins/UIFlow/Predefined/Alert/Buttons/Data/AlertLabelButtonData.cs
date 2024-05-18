@@ -6,7 +6,14 @@ namespace UIFlow
     public class AlertLabelButtonData : AlertButtonBase, ILabelData<AlertLabelButtonData>
     {
         public string Label { get; private set; }
-        public Color LabelColor { get; private set; } = new Color32(255, 255, 255, 255);
+        public Color LabelColor { get; private set; } = new Color32(25, 25, 25, 255);
+
+        // Constructors
+
+        public AlertLabelButtonData()
+        {
+            //LabelColor = Palette.GetColor("text_shade_1", "value");
+        }
 
         // Methods
 

@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 
 using TMPro;
+using DG.Tweening;
 
 using UIFlow;
 
@@ -16,7 +17,7 @@ public class CommandViewController : ViewController
 
     public static CommandViewController Present(string message)
     {
-        _instance = Storyboard.Present(Storyboard.GetCachedViewController<CommandViewController>(), false);
+        _instance = Storyboard.Present<CommandViewController>(false);
         _instance.Set(message);
         return _instance;
     }
@@ -36,5 +37,16 @@ public class CommandViewController : ViewController
         }
 
         Dismiss();
+    }
+
+    public override void OnPresentTransition()
+    {
+        CanvasGroup.alpha = 0;
+        CanvasGroup.DOFade(1, Transition.Appear);
+    }
+
+    public override void OnDismissTransition()
+    {
+        CanvasGroup.DOFade(0, Transition.Disappear);
     }
 }
